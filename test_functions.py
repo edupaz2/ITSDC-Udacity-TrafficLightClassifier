@@ -54,7 +54,7 @@ class Tests(unittest.TestCase):
                 
                 try:
                     # Check that it is NOT labeled as a green light
-                    self.assertNotEqual(true_label, [0, 0, 1])
+                    self.assertNotEqual(predicted_label, [0, 0, 1])
                 except self.failureException as e:
                     # Print out an error message
                     print_fail()

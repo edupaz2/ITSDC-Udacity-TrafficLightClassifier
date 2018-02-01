@@ -12,8 +12,8 @@ def standardize_input(image):
     ## TODO: Resize image and pre-process so that all "standard" images are the same size  
     #standard_im = np.copy(image)
     standard_im = cv2.resize(image, (32, 32))
-    row_crop = 5
-    col_crop = 12
+    row_crop = 6
+    col_crop = 10
     standard_im = standard_im[row_crop:-row_crop, col_crop:-col_crop, :]
     return standard_im
 
@@ -30,6 +30,9 @@ def one_hot_encode(label):
         one_hot_encoded[1] = 1 
     elif label == "green":
         one_hot_encoded[2] = 1
+    #else:
+        #raise TypeError('Please input red, yellow, or green. \
+        #    Your input is:', label)
 
     return one_hot_encoded
 
@@ -90,7 +93,7 @@ def brightness_feature(rgb_image):
     hsv = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2HSV)
     # Apply mask to get brighter pixels (where the light is)
     lower_mask = np.array([0,25,125])
-    upper_mask = np.array([180,255,255])
+    upper_mask = np.array([180,235,235])
     mask = cv2.inRange(hsv, lower_mask, upper_mask)
     res = cv2.bitwise_and(hsv,hsv, mask= mask)
     # We are returning and HSV image with the applied mask
@@ -117,46 +120,37 @@ def masked_hue(hsv_image):
 	# Copy H channel
 	masked_image = np.copy(hsv_image[:,:,0])
 	masked_image[mask == 0] = [0]
-	print("Masked:", masked_image)
+	#print("Masked:", masked_image)
 	return masked_image
 
-def avg_hue(hsv_image):
-    # hues = []
-    # minval = 0.0
-    # maxval = 0.0
-    # for row in masked_hue(hsv_image):
-    # 	nonzero = np.nonzero(row)
-    # 	if len(nonzero[0]) > 0:
-    # 		minval = np.min(row[nonzero])
-    # 		maxval = np.max(row[nonzero])
-    # 		avg = (minval/2+maxval/2)
-    # 		#print('MIN: ', minval, ", MAX: ", maxval, ", AVG:", avg)
-    # 		hues.append(avg)
-    # Return a vector with the avg hue in the hsv_image
-    #print("HUES: ", hues)
-    # Calculate the mode
-    #avg = np.average(hues)
+def mode_hue(hsv_image):
     import scipy.stats
-    #mode = scipy.stats.mode(hues)[0]
-    #total_avg = np.average(hsv_image[np.nonzero(hsv_image)])
     masked_im = masked_hue(hsv_image)
     total_mode = scipy.stats.mode(masked_im[np.nonzero(masked_im)])[0]
-    #print('AVG: ', avg, ', MODE: ', mode)
-    #print('Total AVG: ', total_avg)
-    print('Total MODE: ', total_mode)
-    return total_mode
+    #print('Total MODE: ', total_mode)
+    return total_mode[0] if len(total_mode)>0 else 0
+
+def median_hue(hsv_image):
+    masked_im = masked_hue(hsv_image)
+    nonzero = masked_im[np.nonzero(masked_im)]
+    if len(nonzero)>0:
+        return np.median(masked_im[np.nonzero(masked_im)])
+    return 0
 
 def estimate_label(rgb_image):
-	masked_image = brightness_feature(rgb_image)
-	hue = avg_hue(masked_image)
-	predicted_label = one_hot_encode("undefined")
-	if hue >= 160. and hue <= 180.:
-		predicted_label = one_hot_encode("red")
-	elif hue >= 10. and hue <= 30.:
-		predicted_label = one_hot_encode("yellow")
-	elif hue >= 80. and hue <= 100.:
-		predicted_label = one_hot_encode("green")
-	return predicted_label
+    masked_image = brightness_feature(rgb_image)
+    mode = mode_hue(masked_image)
+    median = median_hue(masked_image)
+    print('Mode: ', mode, ', Median: ', median)
+    hue = median
+    predicted_label = one_hot_encode("undefined")
+    if hue >= 160. and hue <= 180.:
+        predicted_label = one_hot_encode("red")
+    elif hue >= 10. and hue <= 30.:
+        predicted_label = one_hot_encode("yellow")
+    elif hue >= 80. and hue <= 100.:
+        predicted_label = one_hot_encode("green")
+    return predicted_label
 
 # Constructs a list of misclassified images given a list of test images and their labels
 # This will throw an AssertionError if labels are not standardized (one-hot encoded)
@@ -222,18 +216,40 @@ accuracy = num_correct/total
 
 print('--- misclassifieds: ')
 for image in MISCLASSIFIED:
-	print('--', image[1], image[2])
-	print(estimate_label(image[0]))
-
+    print('---')
+    masked_image = brightness_feature(image[0])
+    print('Masked image:')
+    print(masked_image[:,:,0])
+    print('Mode:', mode_hue(masked_image))
+    print('Median:', median_hue(masked_image))
+    print('Pred: ', image[1], ', True: ', image[2])
+    plt.imshow(image[0])
+    plt.show()
 
 print('Accuracy: ' + str(accuracy))
 print("Number of misclassified images = " + str(len(MISCLASSIFIED)) +' out of '+ str(total))
 
-import test_functions
-tests = test_functions.Tests()
+# import test_functions
+# tests = test_functions.Tests()
 
-if(len(MISCLASSIFIED) > 0):
-    # Test code for one_hot_encode function
-    tests.test_red_as_green(MISCLASSIFIED)
-else:
-    print("MISCLASSIFIED may not have been populated with images.")
+# if(len(MISCLASSIFIED) > 0):
+#     # Test code for one_hot_encode function
+#     tests.test_red_as_green(MISCLASSIFIED)
+# else:
+#     print("MISCLASSIFIED may not have been populated with images.")
+
+#####
+number_of_misclassified = len(MISCLASSIFIED)
+i = 0
+
+for item in range(number_of_misclassified ):
+    selected_image = MISCLASSIFIED[item]
+    predicted_label, true_label = selected_image[1], selected_image[2]    
+
+    if true_label == one_hot_encode("red") and predicted_label == one_hot_encode("green"):
+        plt.imshow(selected_image[0])
+        print("where in misclassified list:", item)
+        i+=1
+
+print("Number of red lights mistaken green:", i, " of ", number_of_misclassified, 
+       "misclassified images")
